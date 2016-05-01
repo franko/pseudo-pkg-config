@@ -1,23 +1,62 @@
 #!python
 
+# Pseudo pkg-config -- an alternative pkg-config implementation
+#
+# Copyright (C) 2016 Francesco Abbate. All rights reserved.
+#
+# Pseudo pkg-config is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Pseudo pkg-config is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Pseudo pkg-config.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import os
+import re
 import sys
+import glob
 
-SYS_PATH = 'c:/fra/local'
-SYS_INC_PATH = "%s/include" % SYS_PATH
-SYS_LIB_PATH = "%s/lib" % SYS_PATH
+def interpolate_string(var_list, s):
+    def subst(m):
+        name = m.group(1)
+        return var_list[name] if name in var_list else ""
+    return re.sub(r'\$\{([a-zA-Z_]\w*)\}', subst, s)
 
-libs = {
-   'libpng': {
-       'version': '1.2.8',
-       'cflags': "-I%s" % SYS_INC_PATH,
-       'libs': ' '.join(["-L%s" % SYS_LIB_PATH, "-lpng"])
-    },
-   'pixman-1': {
-       'version': '0.30.0',
-       'cflags': "-I%s/pixman" % SYS_INC_PATH,
-       'libs': ' '.join(["-L%s" % SYS_LIB_PATH, "-lpixman-1"])
-    }
-}
+def read_pc(filename):
+    var_list = {}
+    declarations = {}
+    f = open(filename, "r")
+    for line in f:
+        m = re.match(r'([a-zA-Z_]\w*) *= *(.+)$', line)
+        if m:
+            var_list[m.group(1)] = interpolate_string(var_list, m.group(2).strip())
+        else:
+            m = re.match(r'([A-Z]\w*): (.+)$', line)
+            if m:
+                dec_name = m.group(1).lower()
+                declarations[dec_name] = interpolate_string(var_list, m.group(2).strip())
+    f.close()
+    return declarations
+
+PKG_CONFIG_VERSION = "0.29.1"
+DEFAULT_PKG_CONFIG_PATH = "/usr/lib/pkgconfig"
+PKG_CONFIG_PATH = os.environ['PKG_CONFIG_PATH'] if 'PKG_CONFIG_PATH' in os.environ else DEFAULT_PKG_CONFIG_PATH
+
+libs = {}
+
+for filename in glob.glob(os.path.join(PKG_CONFIG_PATH, "*.pc")):
+    m = re.match(r'(.+)\.pc', os.path.basename(filename))
+    if m:
+        pc_name = m.group(1)
+        pc = read_pc(filename)
+        libs[pc_name] = pc
 
 what = None
 libspec = None
@@ -27,17 +66,17 @@ def exit_error(msg):
     sys.exit(1)
 
 def print_usage():
-    print("pkg-config [--cflags] [--libs] LIBRARY")
+    print("pkg-config [--modversion] [--cflags] [--libs] [--exists] [--atleast-version=VERSION] [LIBRARIES...]")
     sys.exit(1)
 
 for opt in sys.argv[1:]:
     if opt == '--version':
-        print("0.26")
-	sys.exit(0)
+        print(PKG_CONFIG_VERSION)
+        sys.exit(0)
     if opt == '--atleast-pkgconfig-version':
         sys.exit(0)
-    if opt in ["--exists", "--cflags", "--libs"]:
-        what = opt[2:]
+    if opt in ["--exists", "--modversion", "--cflags", "--libs"]:
+        what = opt[2:] if opt[2:] != "modversion" else "version"
     if opt[0] != '-':
         if libspec: exit_error("duplicate library name")
         libspec = opt
@@ -102,14 +141,16 @@ def parse_libnames(mylibspec):
 if what == "exists":
     for predicate in parse_predicates(libspec):
         if not predicate(libs):
-            print("FAIL")
             sys.exit(1)
-    print("SUCCESS")
     sys.exit(0)
 
 for libname in parse_libnames(libspec):
     if libname in libs:
-        print(libs[libname][what])
+        print(libs[libname][what] if what in libs[libname] else "")
     else:
-        exit_error("unknown library: %s" % libname)
+        msg = """Package libaggx was not found in the pkg-config search path.
+Perhaps you should add the directory containing `%s.pc'
+to the PKG_CONFIG_PATH environment variable
+No package '%s' found"""
+        exit_error(msg % (libname, libname))
         sys.exit(1)
