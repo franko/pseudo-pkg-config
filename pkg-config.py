@@ -66,7 +66,7 @@ def exit_error(msg):
     sys.exit(1)
 
 def print_usage():
-    print("pkg-config [--modversion] [--cflags] [--libs] [--exists] [--atleast-version=VERSION] [LIBRARIES...]")
+    print("pkg-config [--modversion] [--cflags] [--libs] [--exists] [--atleast-pkgconfig-version=VERSION] [LIBRARIES...]")
     sys.exit(1)
 
 for opt in sys.argv[1:]:
