@@ -148,9 +148,9 @@ for libname in parse_libnames(libspec):
     if libname in libs:
         print(libs[libname][what] if what in libs[libname] else "")
     else:
-        msg = """Package libaggx was not found in the pkg-config search path.
-Perhaps you should add the directory containing `%s.pc'
+        msg = """Package %(lib)s was not found in the pkg-config search path.
+Perhaps you should add the directory containing `%(lib)s.pc'
 to the PKG_CONFIG_PATH environment variable
-No package '%s' found"""
-        exit_error(msg % (libname, libname))
+No package '%(lib)s' found"""
+        exit_error(msg % {'lib': libname})
         sys.exit(1)
